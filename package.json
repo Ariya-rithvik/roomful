@@ -1,0 +1,23 @@
+{
+  "name": "roomcaption",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Roomcaption - live, large-print captions of the family table on Fire TV. Every phone is a named microphone.",
+  "license": "MIT",
+  "engines": { "node": ">=22.13" },
+  "workspaces": ["shared", "server", "phone-web"],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:phone": "npm run dev -w phone-web",
+    "build:phone": "npm run build -w phone-web",
+    "start": "npm run build:phone && npm run start -w server",
+    "test": "node --import tsx --test --test-force-exit \"shared/test/*.test.ts\" \"server/test/*.test.ts\"",
+    "typecheck": "tsc -p shared && tsc -p server && tsc -p phone-web"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "~5.7.0"
+  }
+}

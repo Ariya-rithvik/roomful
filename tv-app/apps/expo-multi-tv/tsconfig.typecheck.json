@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@roomcaption/shared": [
+        "../../../shared/src/index.ts"
+      ],
+      "@multi-tv/shared-ui": [
+        "../../packages/shared-ui/src/index.ts"
+      ],
+      "*": [
+        "./node_modules/@types/*",
+        "./node_modules/*"
+      ]
+    }
+  }
+}

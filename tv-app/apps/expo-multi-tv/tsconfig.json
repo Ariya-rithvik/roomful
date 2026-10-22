@@ -1,0 +1,23 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@roomcaption/shared": [
+        "../../../shared/src/index.ts"
+      ],
+      "@multi-tv/shared-ui": [
+        "../../packages/shared-ui/src/index.ts"
+      ]
+    },
+    "baseUrl": "."
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
+}

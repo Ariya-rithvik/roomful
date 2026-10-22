@@ -1,0 +1,867 @@
+<!doctype html>
+<!--
+  ROOMCAPTION DEMO STAGE
+  ======================
+  One laptop screen that shows the REAL Roomcaption TV app on a virtual TV, with up to four REAL
+  phone pages in phone frames on a coffee table in front of it. Nothing on this page is faked or
+  recorded: every frame is the live app talking to the live server on this computer.
+
+  HOW TO OPEN IT
+    1. Start the apps as usual (README, "Run it"): the server (phone page on http://localhost:8788)
+       and the TV web preview (http://localhost:8082).
+    2. Either double-click this file so it opens in Chrome
+         file:///D:/roomcaption/demo-stage/index.html
+       or serve this folder from localhost and open http://localhost:5180/
+         python -m http.server 5180 --directory D:/roomcaption/demo-stage
+       Serving from localhost avoids any "local network access" prompt that some Chrome versions
+       show for pages opened from a file. (Do not use ports 8787, 8788, 8082 or 8099.)
+    3. Read the 4-character room code on the TV, type it in "Room code", pick 1-4 phones and press
+       "Load phones". Join on each phone frame with a different name.
+    4. Click the TV once to give it the keyboard, which is the remote: arrows move, Enter = OK,
+       Backspace = Back, Space = play/pause, H = the menu key (Help mode).
+    5. "Pick up" on a phone makes it big at the side of the screen; "Full screen TV" shows only the TV.
+
+  WHY phone1.localhost, phone2.localhost ...
+    The phone page remembers who it is in browser storage, which is kept per address. If all frames
+    used localhost:8788 they would be ONE person joining four times (the server keeps only the newest).
+    Chrome sends every *.localhost name to this computer, so each frame gets its own address and
+    counts as its own person. This only happens when the phone base URL is localhost / 127.0.0.1.
+
+  URL PARAMETERS (optional)
+    ?room=K7QM&phones=3&tv=http://localhost:8082&phone=http://localhost:8788&load=1
+
+  LIMITS (also shown on the page)
+    Cameras, microphones, vibration and Alexa voice do not work inside this page. Use real phones and
+    a real Fire TV for those, or the labelled test phones: node scripts/sim-phones.mjs <ROOM>
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roomcaption Demo Stage</title>
+<meta name="description" content="Live simulator: the real Roomcaption TV app and phone pages running on this computer, shown together on one screen.">
+<meta name="theme-color" content="#16110F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    /* DESIGN.md "Evening" tokens */
+    --bg: #16110F;
+    --bg-glow: #2A1D16;
+    --s1: #211A17;
+    --s2: #2D2420;
+    --s3: #3A2F2A;
+    --line: #45382F;
+    --line-strong: #6A5A4E;
+    --text-strong: #FFF7EE;
+    --text: #F3E9DF;
+    --muted: #CDBFB3;
+    --faint: #A8998D;
+    --accent: #FFB547;
+    --accent-ink: #2A1A05;
+    --focus-fill: #FFF1DC;
+    --focus-ink: #1C1410;
+    --ring: #FFF7EE;
+    --ok: #8EE39A;
+    --warn: #FFCF6B;
+    --bad: #FF9A8A;
+    --sky: #7CC4FF;
+    --coral: #FF8B7B;
+    --leaf: #93DB8C;
+    --lilac: #C6A8FF;
+    /* set by the layout script */
+    --tv-screen-w: 960px;
+    --tv-scale: 0.5;
+    --phone-scale: 0.45;
+    --held-scale: 0.9;
+    --held-space: 0px;
+    --cols: 3;
+    --top-h: 120px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: 'Noto Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.4;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ic.big { width: 40px; height: 40px; stroke-width: 1.6; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+  button { font: inherit; }
+
+  /* ---------- control bar ---------- */
+  .bar {
+    position: relative; z-index: 20;
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 20px;
+    padding: 10px 16px 12px;
+    background: rgba(33, 26, 23, 0.96);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; flex-direction: column; align-self: center; margin-right: 4px; }
+  .wordmark { font-family: 'Baloo 2', 'Noto Sans', sans-serif; font-weight: 800; font-size: 28px; line-height: 1; color: var(--text-strong); }
+  .wordmark b { color: var(--accent); font-weight: 800; }
+  .brand-sub { margin-top: 2px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+  .controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; flex: 1 1 640px; margin: 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .lab { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  input[type="text"], input[type="url"] {
+    height: 38px; min-width: 0; padding: 0 10px;
+    background: var(--s2); color: var(--text-strong);
+    border: 2px solid var(--line-strong); border-radius: 10px;
+    font: inherit; font-size: 14px;
+  }
+  input:focus-visible { outline-offset: 2px; border-color: var(--accent); }
+  #room { width: 104px; font-size: 20px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; }
+  #room::placeholder { color: var(--faint); letter-spacing: 0.2em; font-weight: 400; }
+  .url input { width: 196px; }
+  .seg { display: flex; height: 38px; border: 2px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: var(--s2); }
+  .seg button {
+    width: 38px; border: 0; border-right: 1px solid var(--line); background: transparent;
+    color: var(--muted); font-weight: 600; font-size: 15px; cursor: pointer; position: relative;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--s3); color: var(--text-strong); font-weight: 700; }
+  .seg button[aria-pressed="true"]::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); }
+  .seg button:focus-visible { outline-offset: -4px; }
+  .btn {
+    height: 38px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 10px; border: 2px solid var(--line-strong); background: var(--s2);
+    color: var(--text-strong); font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: var(--s3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 0 #D9922A; }
+  .btn.primary:hover { background: #FFC266; }
+  .btn:disabled { opacity: 0.5; cursor: progress; }
+  .btn[aria-pressed="true"] { background: var(--s3); border-color: var(--accent); }
+  .btn .on-mark { display: none; color: var(--accent); }
+  .btn[aria-pressed="true"] .on-mark { display: inline; }
+  .status { display: flex; flex-wrap: wrap; gap: 8px; align-self: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px;
+    border-radius: 999px; background: var(--s2); border: 1px solid var(--line);
+    font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap;
+  }
+  .chip .ic { width: 16px; height: 16px; }
+  .chip.ok .ic { color: var(--ok); }
+  .chip.bad .ic { color: var(--bad); }
+  .chip.wait .ic { color: var(--faint); }
+
+  /* ---------- honesty notice + messages ---------- */
+  .notice {
+    display: flex; align-items: flex-start; gap: 10px; padding: 8px 16px;
+    background: #261C15; border-bottom: 1px solid var(--line); color: var(--text); font-size: 14px;
+  }
+  .notice > .ic { color: var(--accent); margin-top: 2px; }
+  .notice p { margin: 0; }
+  .notice strong { color: var(--accent); }
+  .notice details { margin-top: 4px; }
+  .notice summary { cursor: pointer; color: var(--muted); font-weight: 600; width: fit-content; }
+  .notice summary:hover { color: var(--text-strong); }
+  .can { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 32px; margin: 8px 0 4px; }
+  .can h3 { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .can h3 .ic { width: 16px; height: 16px; }
+  .can .yes h3 .ic { color: var(--ok); }
+  .can .no h3 .ic { color: var(--warn); }
+  .can ul { margin: 0; padding-left: 18px; color: var(--text); }
+  .can li { margin: 2px 0; }
+  code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 0.92em; background: var(--s2); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; color: var(--text-strong); }
+  .msg { margin: 0; display: none; align-items: flex-start; gap: 10px; padding: 8px 16px; font-size: 14px; border-bottom: 1px solid var(--line); background: var(--s1); }
+  .msg.show { display: flex; }
+  .msg .ic { margin-top: 2px; }
+  .msg.ok .ic { color: var(--ok); }
+  .msg.warn .ic { color: var(--warn); }
+  .msg.bad .ic { color: var(--bad); }
+  .msg.info .ic { color: var(--accent); }
+  .msg b { color: var(--text-strong); }
+
+  /* ---------- the living room ---------- */
+  .scene {
+    position: relative; overflow: hidden;
+    min-height: calc(100vh - var(--top-h));
+    padding: 22px 16px 0;
+    padding-right: calc(16px + var(--held-space));
+    background:
+      radial-gradient(900px 620px at 10% -4%, rgba(255, 181, 71, 0.16), transparent 62%),
+      radial-gradient(1100px 700px at 50% 8%, rgba(124, 196, 255, 0.05), transparent 60%),
+      linear-gradient(180deg, #241912 0%, var(--bg-glow) 30%, #1A1310 62%, var(--bg) 100%);
+    display: flex; flex-direction: column;
+  }
+  .scene::before { /* wall panelling */
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(90deg, rgba(255, 240, 222, 0.022) 0 2px, transparent 2px 140px);
+  }
+  .tv-zone { position: relative; display: flex; justify-content: center; align-items: flex-end; }
+  .tv {
+    position: relative; z-index: 2;
+    padding: 12px 12px 26px;
+    background: linear-gradient(180deg, #171211, #0B0908);
+    border-radius: 18px;
+    box-shadow: 0 0 0 1px #3A2F2A, inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 32px 80px rgba(0, 0, 0, 0.65);
+    transition: box-shadow 150ms;
+  }
+  .tv::before { /* light the TV throws on the wall */
+    content: ""; position: absolute; inset: -14% -10%; z-index: -1; pointer-events: none;
+    background: radial-gradient(closest-side, rgba(124, 196, 255, 0.13), rgba(255, 181, 71, 0.06) 55%, transparent 100%);
+    filter: blur(24px);
+  }
+  .tv.has-keys { box-shadow: 0 0 0 4px var(--bg), 0 0 0 8px var(--ring), 0 32px 80px rgba(0, 0, 0, 0.65); }
+  .tv-screen {
+    position: relative; overflow: hidden; background: #000;
+    width: var(--tv-screen-w); height: calc(var(--tv-screen-w) * 0.5625);
+    border-radius: 4px;
+  }
+  .tv-screen iframe {
+    position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; background: #000;
+    transform: scale(var(--tv-scale)); transform-origin: 0 0;
+  }
+  .tv-off {
+    position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    color: var(--muted); text-align: center; padding: 24px; font-size: 15px;
+  }
+  .tv-off.show { display: flex; }
+  .tv-off .ic { color: var(--bad); }
+  .bezel-tag {
+    position: absolute; left: 16px; bottom: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .bezel-led { position: absolute; right: 18px; bottom: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .console {
+    position: relative; z-index: 1; align-self: center;
+    width: min(calc(var(--tv-screen-w) * 0.72), 92%); height: 22px; margin-top: 14px;
+    background: linear-gradient(180deg, #5A3B26, #3A2717);
+    border-radius: 6px 6px 10px 10px;
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 220, 180, 0.12);
+  }
+  /* lamp (left) and plant (right), pure CSS */
+  .lamp, .plant { position: absolute; bottom: 0; pointer-events: none; }
+  .lamp { right: calc(50% + var(--tv-screen-w) / 2 + 56px); width: 116px; height: min(90%, 460px); }
+  .lamp::before { /* glow */
+    content: ""; position: absolute; top: -120px; left: 50%; width: 560px; height: 560px; transform: translateX(-50%);
+    background: radial-gradient(closest-side, rgba(255, 190, 100, 0.24), rgba(255, 181, 71, 0.07) 55%, transparent);
+  }
+  .lamp .shade { position: absolute; top: 0; left: 0; width: 116px; height: 74px; clip-path: polygon(20% 0, 80% 0, 100% 100%, 0 100%); background: linear-gradient(180deg, #FFE6BD, #EAB46C); }
+  .lamp .pole { position: absolute; top: 74px; bottom: 6px; left: 50%; width: 4px; transform: translateX(-50%); background: linear-gradient(90deg, #6B5443, #3E3027); }
+  .lamp .foot { position: absolute; bottom: 0; left: 50%; width: 64px; height: 10px; transform: translateX(-50%); border-radius: 50%; background: #3E3027; }
+  .plant { left: calc(50% + var(--tv-screen-w) / 2 + 56px); width: 130px; height: 210px; }
+  .plant .pot { position: absolute; bottom: 0; left: 30px; width: 70px; height: 70px; clip-path: polygon(0 0, 100% 0, 84% 100%, 16% 100%); background: linear-gradient(180deg, #A35A38, #6E3A24); }
+  .plant .leaf { position: absolute; bottom: 62px; left: 58px; width: 26px; height: 120px; border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%; background: linear-gradient(180deg, #5E8452, #33502F); transform-origin: 50% 100%; }
+  .plant .leaf:nth-child(2) { transform: rotate(-34deg); height: 110px; }
+  .plant .leaf:nth-child(3) { transform: rotate(30deg); height: 118px; background: linear-gradient(180deg, #6C9460, #3A5934); }
+  .plant .leaf:nth-child(4) { transform: rotate(-62deg); height: 86px; }
+  .plant .leaf:nth-child(5) { transform: rotate(58deg); height: 90px; background: linear-gradient(180deg, #6C9460, #3A5934); }
+  .plant .leaf:nth-child(6) { transform: rotate(6deg); height: 140px; }
+  .no-decor .lamp, .no-decor .plant { display: none; }
+
+  /* keys legend */
+  .keys {
+    position: relative; z-index: 2;
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px;
+    margin: 14px auto 0; color: var(--muted); font-size: 13px;
+  }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .kbd {
+    min-width: 28px; height: 28px; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center;
+    border: 2px solid var(--line-strong); border-radius: 8px; background: var(--s1);
+    color: var(--text); font-weight: 700; font-size: 12px;
+  }
+  .target { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 8px; border-radius: 999px; border: 2px solid var(--line-strong); background: var(--s1); color: var(--text); font-weight: 600; }
+  .target.live { border-color: var(--ring); background: var(--s3); color: var(--text-strong); }
+
+  /* coffee table + phones */
+  .table-zone { position: relative; flex: 1; margin: 22px -16px 0; margin-right: calc(-16px - var(--held-space)); padding: 0 16px 28px; padding-right: calc(16px + var(--held-space)); display: flex; flex-direction: column; justify-content: flex-start; }
+  .table-zone::before { /* floor */
+    content: ""; position: absolute; left: 0; right: 0; top: 22%; bottom: 0; pointer-events: none;
+    background:
+      radial-gradient(60% 70% at 50% 60%, rgba(178, 92, 58, 0.16), transparent 70%),
+      linear-gradient(180deg, #24180F, #19110C);
+  }
+  .table-top {
+    position: absolute; left: 50%; transform: translateX(-50%); z-index: 0; pointer-events: none;
+    width: min(calc(var(--phones-w, 600px) + 140px), calc(100% - 24px));
+    bottom: 22px; height: calc(812px * var(--phone-scale) * 0.36 + 64px);
+    border-radius: 30px 30px 18px 18px;
+    background: linear-gradient(180deg, #74502F, #4D321E 70%, #432B19);
+    box-shadow: 0 14px 0 #2B1B10, 0 34px 60px rgba(0, 0, 0, 0.55), inset 0 2px 0 rgba(255, 220, 180, 0.16);
+  }
+  .table-label { position: relative; z-index: 1; align-self: center; margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); display: flex; align-items: center; gap: 6px; }
+  .phones { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(var(--cols), auto); justify-content: center; align-items: end; gap: 18px 26px; }
+  .slot { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .ghost {
+    display: none; align-items: center; justify-content: center; text-align: center; padding: 12px;
+    width: calc(375px * var(--phone-scale) + 16px); height: calc(812px * var(--phone-scale) + 20px);
+    border: 3px dashed var(--line-strong); border-radius: calc(44px * var(--phone-scale) + 8px);
+    color: var(--muted); font-size: 13px; font-weight: 600; background: rgba(22, 17, 15, 0.5);
+  }
+  .slot.is-held .ghost { display: flex; }
+  .device { --s: var(--phone-scale); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .device.held { position: fixed; right: 24px; bottom: 20px; z-index: 40; --s: var(--held-scale); }
+  .device-frame {
+    position: relative; padding: 12px 8px 8px;
+    background: linear-gradient(160deg, #221B18, #0C0908);
+    border-radius: calc(44px * var(--s) + 8px);
+    box-shadow: 0 0 0 1px #40352E, 0 0 0 3px #0A0807, 0 18px 32px rgba(0, 0, 0, 0.6);
+  }
+  .device.held .device-frame { box-shadow: 0 0 0 1px #40352E, 0 0 0 3px #0A0807, 0 30px 90px rgba(0, 0, 0, 0.75); }
+  .device.has-keys .device-frame { outline: 4px solid var(--ring); outline-offset: 4px; }
+  .speaker { position: absolute; top: 4px; left: 50%; width: 34px; height: 4px; transform: translateX(-50%); border-radius: 4px; background: #2E2622; }
+  .device-screen {
+    position: relative; overflow: hidden; background: var(--bg);
+    width: calc(375px * var(--s)); height: calc(812px * var(--s));
+    border-radius: calc(38px * var(--s));
+  }
+  .device-screen iframe {
+    position: absolute; left: 0; top: 0; width: 375px; height: 812px; border: 0; background: var(--bg);
+    transform: scale(var(--s)); transform-origin: 0 0;
+  }
+  .empty {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px;
+    background: radial-gradient(120% 70% at 30% 0%, var(--bg-glow), var(--bg) 70%);
+  }
+  .empty strong { color: var(--text-strong); font-size: 15px; }
+  .empty .ic { color: var(--line-strong); }
+  .empty .host { font-size: 11px; color: var(--faint); word-break: break-all; }
+  .slot.loaded .empty { display: none; }
+  .device-bar {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px;
+    padding: 4px 5px 4px 10px; max-width: max(100%, 200px);
+    background: rgba(22, 17, 15, 0.9); border: 1px solid var(--line); border-radius: 999px;
+  }
+  .device-name { font-size: 13px; font-weight: 700; color: var(--text-strong); white-space: nowrap; }
+  .mini {
+    height: 30px; min-width: 30px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    border-radius: 999px; border: 1px solid var(--line-strong); background: var(--s2); color: var(--text);
+    font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .mini .ic { width: 15px; height: 15px; }
+  .mini:hover { background: var(--s3); color: var(--text-strong); }
+  .mini.icon { padding: 0; width: 30px; }
+  .mini[aria-pressed="true"] { border-color: var(--accent); background: var(--s3); color: var(--text-strong); }
+  a.mini:not([href]) { opacity: 0.4; pointer-events: none; }
+
+  /* ---------- full screen TV ---------- */
+  .exit-full {
+    position: fixed; top: 14px; right: 14px; z-index: 60; display: none;
+    opacity: 0.55; transition: opacity 150ms;
+  }
+  .exit-full:hover, .exit-full:focus-visible { opacity: 1; }
+  .fulltv .bar, .fulltv .notice, .fulltv .msg, .fulltv .keys, .fulltv .table-zone, .fulltv .console, .fulltv .lamp, .fulltv .plant { display: none; }
+  .fulltv .exit-full { display: inline-flex; }
+  .fulltv .scene { min-height: 100vh; padding: 0; justify-content: center; align-items: center; background: #0B0807; }
+  .fulltv .scene::before { display: none; }
+  .fulltv .tv { padding: 8px 8px 22px; border-radius: 12px; }
+  .fulltv .tv::before { display: none; }
+
+  @media (max-width: 720px) {
+    .url input { width: 100%; }
+    .url { flex: 1 1 100%; }
+    .wordmark { font-size: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2" width="11" height="20" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.6v.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 12.5l3 3 6-6.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.3v.01"/></symbol>
+  <symbol id="i-bad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-wait" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M21.5 20a6.5 6.5 0 0 0-3.8-5.9"/></symbol>
+  <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+
+<header class="bar" id="bar">
+  <div class="brand">
+    <span class="wordmark">Roomcaption<b>.</b></span>
+    <span class="brand-sub">Demo stage</span>
+  </div>
+  <form class="controls" id="controls" autocomplete="off">
+    <label class="field">
+      <span class="lab">Room code</span>
+      <input type="text" id="room" maxlength="40" placeholder="K7QM" spellcheck="false" aria-describedby="roomHelp">
+    </label>
+    <div class="field">
+      <span class="lab" id="countLab">Phones</span>
+      <div class="seg" id="phoneCount" role="group" aria-labelledby="countLab">
+        <button type="button" data-n="1" aria-pressed="false">1</button>
+        <button type="button" data-n="2" aria-pressed="false">2</button>
+        <button type="button" data-n="3" aria-pressed="true">3</button>
+        <button type="button" data-n="4" aria-pressed="false">4</button>
+      </div>
+    </div>
+    <button type="submit" class="btn primary" id="load"><svg class="ic"><use href="#i-phone"/></svg>Load phones</button>
+    <label class="field url">
+      <span class="lab">TV app URL</span>
+      <input type="url" id="tvUrl" spellcheck="false" placeholder="http://localhost:8082">
+    </label>
+    <label class="field url">
+      <span class="lab">Phone page base URL</span>
+      <input type="url" id="phoneUrl" spellcheck="false" placeholder="http://localhost:8788">
+    </label>
+    <button type="button" class="btn" id="reloadTv"><svg class="ic"><use href="#i-refresh"/></svg>Reload TV</button>
+    <button type="button" class="btn" id="fullTv" aria-pressed="false"><svg class="ic"><use href="#i-expand"/></svg>Full screen TV<svg class="ic on-mark"><use href="#i-check"/></svg></button>
+  </form>
+  <div class="status" aria-live="polite">
+    <span class="chip wait" id="chipServer"><svg class="ic"><use href="#i-wait"/></svg><span>Server: checking</span></span>
+    <span class="chip wait" id="chipTv"><svg class="ic"><use href="#i-wait"/></svg><span>TV app: checking</span></span>
+  </div>
+</header>
+
+<div class="notice" id="notice">
+  <svg class="ic"><use href="#i-info"/></svg>
+  <div>
+    <p id="roomHelp"><strong>Live simulator:</strong> the real Roomcaption apps running on this computer. Cameras and microphones do not work inside this page; use real phones for that.</p>
+    <details id="canDetails">
+      <summary>What works here, and what needs real phones and a real Fire TV</summary>
+      <div class="can">
+        <div class="yes">
+          <h3><svg class="ic"><use href="#i-ok"/></svg>Works in this page</h3>
+          <ul>
+            <li>Every TV screen of the web build: home with the QR code and room code, Living room (kids channel next to captions, moments or headlines), Captions, Table Hunt, Happy moments, Settings.</li>
+            <li>Joining from each phone frame (name, language, consent). Each frame is a separate person.</li>
+            <li>Table Hunt using the phone's "pick from the list" option; objects and moments sent by the labelled test scripts.</li>
+            <li>Help mode: H on the keyboard (the ☰ key), the countdown on the TV, the alert on the other phone frames and "I'm coming". The alarm sound may need one click inside a phone frame first.</li>
+          </ul>
+        </div>
+        <div class="no">
+          <h3><svg class="ic"><use href="#i-warn"/></svg>Needs real devices</h3>
+          <ul>
+            <li>Speech captions: this computer has one microphone, not one per person. Use real phones, or the labelled test phones <code>node scripts/sim-phones.mjs ROOM</code>.</li>
+            <li>Camera scans (Show) and smile clips (Smile). <code>npx tsx scripts/sim-object.ts</code> sends a labelled test photo and clip.</li>
+            <li>"Alexa, pause" and the real remote: only on the Fire TV stick. Here the keyboard stands in for the remote.</li>
+            <li>Vibration and a locked phone ringing.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+<p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+<main class="scene" id="scene">
+  <div class="tv-zone">
+    <div class="lamp" aria-hidden="true"><span class="shade"></span><span class="pole"></span><span class="foot"></span></div>
+    <div class="tv" id="tv">
+      <div class="tv-screen">
+        <iframe id="tvFrame" title="Roomcaption TV app (web build)" allow="autoplay; microphone; camera; fullscreen"></iframe>
+        <div class="tv-off" id="tvOff">
+          <svg class="ic big"><use href="#i-bad"/></svg>
+          <strong>The TV app is not reachable.</strong>
+          <span>Start the TV web preview (README, "Run it"), check the TV app URL above, then press Reload TV.</span>
+        </div>
+      </div>
+      <span class="bezel-tag" id="bezelTag">Simulator · TV app web build</span>
+      <span class="bezel-led" aria-hidden="true"></span>
+    </div>
+    <div class="plant" aria-hidden="true"><span class="pot"></span><span class="leaf"></span><span class="leaf"></span><span class="leaf"></span><span class="leaf"></span><span class="leaf"></span></div>
+  </div>
+  <div class="console" aria-hidden="true"></div>
+
+  <div class="keys" aria-label="Keyboard as the TV remote">
+    <span class="target" id="keyTarget"><svg class="ic"><use href="#i-keyboard"/></svg><span>Keyboard goes to: this page. Click the TV to use it as the remote.</span></span>
+    <span class="key"><span class="kbd">←</span><span class="kbd">↑</span><span class="kbd">→</span><span class="kbd">↓</span> move</span>
+    <span class="key"><span class="kbd">Enter</span> OK</span>
+    <span class="key"><span class="kbd">Backspace</span> Back</span>
+    <span class="key"><span class="kbd">Space</span> play / pause</span>
+    <span class="key"><span class="kbd">H</span> menu ☰ (Help)</span>
+  </div>
+
+  <section class="table-zone" aria-label="The family's phones">
+    <div class="table-top" aria-hidden="true"></div>
+    <p class="table-label"><svg class="ic"><use href="#i-users"/></svg>The family's phones · each one is a person</p>
+    <div class="phones" id="phones"></div>
+  </section>
+</main>
+
+<button type="button" class="btn exit-full" id="exitFull"><svg class="ic"><use href="#i-close"/></svg>Exit full screen</button>
+
+<script>
+(() => {
+  'use strict';
+  const PHONE_W = 375, PHONE_H = 812, TV_W = 1920;
+  const FRAME_X = 16, FRAME_Y = 20;            // phone frame padding (both sides together)
+  const BEZEL_X = 24, BEZEL_Y = 38;            // TV bezel padding (both sides together)
+  const ROOM_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // same as shared/src/protocol.ts
+  const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+  const DEFAULTS = { room: '', phones: 3, tv: 'http://localhost:8082', phone: 'http://localhost:8788' };
+  const STORE_KEY = 'roomcaption.demoStage.v1';
+
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    bar: $('bar'), notice: $('notice'), msg: $('msg'), controls: $('controls'), room: $('room'),
+    tvUrl: $('tvUrl'), phoneUrl: $('phoneUrl'), seg: $('phoneCount'), load: $('load'),
+    reloadTv: $('reloadTv'), fullTv: $('fullTv'), exitFull: $('exitFull'), tvFrame: $('tvFrame'),
+    tvOff: $('tvOff'), tv: $('tv'), phones: $('phones'), keyTarget: $('keyTarget'),
+    chipServer: $('chipServer'), chipTv: $('chipTv'), canDetails: $('canDetails'), bezelTag: $('bezelTag'),
+  };
+
+  // ---------- settings (per-viewer convenience only) ----------
+  const state = { ...DEFAULTS, loadedRoom: '', held: 0 };
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      for (const k of ['room', 'tv', 'phone']) if (typeof saved[k] === 'string') state[k] = saved[k];
+      if (Number.isInteger(saved.phones)) state.phones = saved.phones;
+    }
+  } catch { /* storage blocked: defaults */ }
+  const params = new URLSearchParams(location.search);
+  if (params.get('room')) state.room = params.get('room');
+  if (params.get('phones')) state.phones = Number(params.get('phones'));
+  if (params.get('tv')) state.tv = params.get('tv');
+  if (params.get('phone')) state.phone = params.get('phone');
+  state.room = cleanRoom(state.room);
+  state.phones = Math.min(4, Math.max(1, Math.round(state.phones) || DEFAULTS.phones));
+
+  function persist() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ room: state.room, phones: state.phones, tv: state.tv, phone: state.phone }));
+    } catch { /* fine */ }
+  }
+
+  // ---------- helpers ----------
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  }
+  function icon(name, cls) {
+    return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+  }
+  /** Accepts "k7qm", "K7QM" or a pasted join link ".../join/K7QM". */
+  function cleanRoom(v) {
+    let s = String(v || '');
+    const m = /\/join\/([A-Za-z0-9]{4})/.exec(s);
+    if (m) s = m[1];
+    return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  }
+  function isRoomCode(c) {
+    return c.length === 4 && [...c].every((ch) => ROOM_ALPHABET.includes(ch));
+  }
+  function parseUrl(v, fallback) {
+    let s = String(v || '').trim();
+    if (!s) s = fallback;
+    if (!/^https?:\/\//i.test(s)) s = 'http://' + s;
+    try { return new URL(s); } catch { return new URL(fallback); }
+  }
+  function tvUrl() { return parseUrl(state.tv, DEFAULTS.tv).toString(); }
+  function phoneBase() {
+    const u = parseUrl(state.phone, DEFAULTS.phone);
+    u.pathname = '/'; u.search = ''; u.hash = '';
+    return u;
+  }
+  /** Each frame gets its own *.localhost address so the browser keeps it as a separate person. */
+  function phoneUrl(i, room) {
+    const u = phoneBase();
+    if (LOOPBACK.has(u.hostname)) u.hostname = 'phone' + i + '.localhost';
+    u.pathname = '/join/' + room;
+    return u.toString();
+  }
+  function phoneHost(i) {
+    const u = phoneBase();
+    if (LOOPBACK.has(u.hostname)) u.hostname = 'phone' + i + '.localhost';
+    return u.host;
+  }
+  function say(kind, html) {
+    if (!html) { el.msg.className = 'msg'; el.msg.innerHTML = ''; layout(); return; }
+    const ic = { ok: 'ok', warn: 'warn', bad: 'bad', info: 'info' }[kind] || 'info';
+    el.msg.className = 'msg show ' + kind;
+    el.msg.innerHTML = icon(ic) + '<span>' + html + '</span>';
+    layout();
+  }
+  function setChip(chip, kind, text) {
+    chip.className = 'chip ' + kind;
+    chip.innerHTML = icon(kind === 'ok' ? 'ok' : kind === 'bad' ? 'bad' : 'wait') + '<span>' + esc(text) + '</span>';
+  }
+
+  // ---------- TV ----------
+  function loadTv() {
+    const url = tvUrl();
+    el.tvFrame.src = url;
+    el.bezelTag.textContent = 'Simulator · TV app web build · ' + new URL(url).host;
+    checkTv();
+  }
+
+  // ---------- phones ----------
+  function makeSlot(i) {
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+    slot.dataset.i = String(i);
+    slot.innerHTML =
+      '<div class="ghost" aria-hidden="true">Phone ' + i + ' is picked up (at the right of the screen)</div>' +
+      '<div class="device">' +
+        '<div class="device-frame">' +
+          '<span class="speaker" aria-hidden="true"></span>' +
+          '<div class="device-screen">' +
+            '<iframe data-phone="' + i + '" title="Phone ' + i + ': Roomcaption phone page" allow="autoplay; microphone; camera; screen-wake-lock"></iframe>' +
+            '<div class="empty">' + icon('phone', 'big') +
+              '<strong>Phone ' + i + '</strong><span>Not loaded yet.</span>' +
+              '<span>Type the room code shown on the TV, then press Load phones.</span>' +
+              '<span class="host">' + esc(phoneHost(i)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="device-bar">' +
+          '<span class="device-name">Phone ' + i + '</span>' +
+          '<button type="button" class="mini hold" aria-pressed="false">' + icon('up') + '<span>Pick up</span></button>' +
+          '<button type="button" class="mini icon reload" title="Reload this phone" aria-label="Reload phone ' + i + '">' + icon('refresh') + '</button>' +
+          '<a class="mini icon open" target="_blank" rel="noopener" title="Open this phone in its own tab" aria-label="Open phone ' + i + ' in a new tab">' + icon('external') + '</a>' +
+        '</div>' +
+      '</div>';
+    slot.querySelector('.hold').addEventListener('click', () => setHeld(i));
+    slot.querySelector('.reload').addEventListener('click', () => {
+      const f = slot.querySelector('iframe');
+      if (f.dataset.src) f.src = f.dataset.src;
+      else say('info', 'Phone ' + i + ' is not loaded yet. Type the room code from the TV and press <b>Load phones</b>.');
+    });
+    return slot;
+  }
+  function loadSlot(slot, room) {
+    const i = Number(slot.dataset.i);
+    const f = slot.querySelector('iframe');
+    const url = phoneUrl(i, room);
+    if (f.dataset.src !== url) {
+      f.dataset.src = url;
+      f.src = url;
+    }
+    slot.classList.add('loaded');
+    slot.querySelector('.open').href = url;
+    slot.querySelector('.device-frame').title = url;
+  }
+  function syncPhones() {
+    const n = state.phones;
+    for (let i = 1; i <= 4; i++) {
+      let slot = el.phones.querySelector('.slot[data-i="' + i + '"]');
+      if (i <= n && !slot) {
+        slot = makeSlot(i);
+        el.phones.appendChild(slot);
+        if (state.loadedRoom) loadSlot(slot, state.loadedRoom);
+      } else if (i > n && slot) {
+        if (state.held === i) setHeld(i);
+        slot.remove();
+      }
+    }
+    for (const b of el.seg.querySelectorAll('button')) b.setAttribute('aria-pressed', String(Number(b.dataset.n) === n));
+    layout();
+  }
+  function setHeld(i) {
+    state.held = state.held === i ? 0 : i;
+    for (const slot of el.phones.children) {
+      const on = Number(slot.dataset.i) === state.held;
+      slot.classList.toggle('is-held', on);
+      slot.querySelector('.device').classList.toggle('held', on);
+      const b = slot.querySelector('.hold');
+      b.setAttribute('aria-pressed', String(on));
+      b.innerHTML = icon(on ? 'down' : 'up') + '<span>' + (on ? 'Put down' : 'Pick up') + '</span>';
+    }
+    layout();
+  }
+
+  async function loadPhones() {
+    const code = cleanRoom(el.room.value);
+    el.room.value = code;
+    state.room = code;
+    persist();
+    if (!isRoomCode(code)) {
+      say('warn', 'Type the 4-character room code shown on the TV. Codes use capital letters and numbers, never I, L, O, 0 or 1.');
+      el.room.focus();
+      return;
+    }
+    const base = phoneBase();
+    el.load.disabled = true;
+    let check = 'unknown';
+    try {
+      const r = await fetch(new URL('/api/rooms/' + code, base), { cache: 'no-store' });
+      check = r.status === 200 ? 'open' : r.status === 404 ? 'missing' : 'unknown';
+    } catch {
+      check = 'unreachable';
+    }
+    el.load.disabled = false;
+    if (check === 'missing') {
+      say('bad', 'Room <b>' + code + '</b> is not open on the server. Read the code on the TV again: a restarted server or a reloaded TV shows a new code.');
+      return;
+    }
+    state.loadedRoom = code;
+    for (const slot of el.phones.children) loadSlot(slot, code);
+    const n = state.phones;
+    const which = n === 1 ? 'Phone 1 shows' : 'Phones 1–' + n + ' show';
+    const loop = LOOPBACK.has(base.hostname);
+    if (base.protocol === 'http:' && !loop) {
+      say('bad', 'The phone base URL is plain HTTP and not localhost, so the phone page blocks joining (the microphone needs a secure page). Use <b>http://localhost:8788</b> here.');
+    } else if (!loop) {
+      say('warn', which + ' room <b>' + code + '</b>, but every frame uses the same address (' + esc(base.host) + '), so the browser treats them as one person: only the last one to join stays connected. Use <b>http://localhost:8788</b> to make them separate people.' +
+        (base.protocol === 'https:' ? ' If a frame shows a certificate warning, open it once in its own tab and accept it.' : ''));
+    } else if (check === 'unreachable') {
+      say('warn', 'Could not reach the server at ' + esc(base.origin) + ' to check room <b>' + code + '</b>. The phones were loaded anyway and will say if the room is missing.');
+    } else {
+      say('ok', which + ' room <b>' + code + '</b>. Join on each one with a different name. Each frame has its own address (phone1.localhost, phone2.localhost …), so each one is a separate person.');
+    }
+  }
+
+  // ---------- status checks (read-only GETs) ----------
+  async function checkServer() {
+    const base = phoneBase();
+    try {
+      const r = await fetch(new URL('/api/health', base), { cache: 'no-store' });
+      if (r.ok) setChip(el.chipServer, 'ok', 'Server: on (' + base.host + ')');
+      else setChip(el.chipServer, 'bad', 'Server: error ' + r.status);
+    } catch {
+      setChip(el.chipServer, 'bad', 'Server: not reachable (' + base.host + ')');
+    }
+  }
+  async function checkTv() {
+    const url = tvUrl();
+    try {
+      await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+      setChip(el.chipTv, 'ok', 'TV app: on (' + new URL(url).host + ')');
+      el.tvOff.classList.remove('show');
+    } catch {
+      setChip(el.chipTv, 'bad', 'TV app: not reachable (' + new URL(url).host + ')');
+      el.tvOff.classList.add('show');
+    }
+  }
+
+  // ---------- layout: fit the TV and the phones to this screen ----------
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const root = document.documentElement.style;
+  function layout() {
+    const vw = document.documentElement.clientWidth;
+    const vh = window.innerHeight;
+    if (document.body.classList.contains('fulltv')) {
+      const sw = Math.max(320, Math.min(vw - BEZEL_X - 16, (vh - BEZEL_Y - 16) * 16 / 9));
+      root.setProperty('--tv-screen-w', sw.toFixed(1) + 'px');
+      root.setProperty('--tv-scale', (sw / TV_W).toFixed(5));
+      return;
+    }
+    const top = el.bar.offsetHeight + el.notice.offsetHeight + el.msg.offsetHeight;
+    root.setProperty('--top-h', top + 'px');
+    let heldSpace = 0;
+    if (state.held) {
+      const hs = clamp((vh - top - 20 - 50 - 16 - FRAME_Y) / PHONE_H, 0.4, 1);
+      root.setProperty('--held-scale', hs.toFixed(5));
+      heldSpace = PHONE_W * hs + FRAME_X + 40;
+    }
+    root.setProperty('--held-space', heldSpace.toFixed(0) + 'px');
+    const W = Math.max(288, vw - 32 - heldSpace);
+    const H = Math.max(520, vh - top);
+    const n = state.phones;
+    const cols = W < 640 ? Math.min(n, 2) : n;
+    const rows = Math.ceil(n / cols);
+    const GAP = 26, BAR_H = 46, LABEL_H = 30;
+    // Phones: as large as the width allows, but at most ~44% of the height for the table.
+    const sByW = ((W - (cols - 1) * GAP) / cols - FRAME_X) / PHONE_W;
+    const sByH = (H * 0.44 / rows - BAR_H - FRAME_Y) / PHONE_H;
+    const s = clamp(Math.min(sByW, sByH), 0.28, 0.62);
+    const phonesH = rows * (PHONE_H * s + FRAME_Y + BAR_H + 8) + (rows - 1) * 18 + LABEL_H + 22 + 28;
+    // TV: whatever height is left (scene padding, console, legend), 16:9.
+    const legendH = W < 900 ? 84 : 46;
+    const tvH = H - phonesH - 22 - 36 - legendH - 14 - BEZEL_Y;
+    let sw = Math.min(W * 0.78, tvH * 16 / 9, 1600);
+    sw = Math.max(sw, Math.min(W - BEZEL_X, 440));
+    root.setProperty('--tv-screen-w', sw.toFixed(1) + 'px');
+    root.setProperty('--tv-scale', (sw / TV_W).toFixed(5));
+    root.setProperty('--phone-scale', s.toFixed(5));
+    root.setProperty('--cols', String(cols));
+    root.setProperty('--phones-w', (cols * (PHONE_W * s + FRAME_X) + (cols - 1) * GAP).toFixed(0) + 'px');
+    document.body.classList.toggle('no-decor', (W - sw - BEZEL_X) / 2 < 200);
+  }
+
+  // ---------- full screen TV ----------
+  let fsByUs = false;
+  async function setFull(on) {
+    document.body.classList.toggle('fulltv', on);
+    el.fullTv.setAttribute('aria-pressed', String(on));
+    layout();
+    if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+      try { await document.documentElement.requestFullscreen(); fsByUs = true; } catch { fsByUs = false; }
+    } else if (!on && document.fullscreenElement && fsByUs) {
+      fsByUs = false;
+      try { await document.exitFullscreen(); } catch { /* fine */ }
+    }
+    layout();
+  }
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && fsByUs) {
+      fsByUs = false;
+      if (document.body.classList.contains('fulltv')) setFull(false);
+    } else layout();
+  });
+
+  // ---------- which frame gets the keyboard ----------
+  let lastTarget = '';
+  function trackKeys() {
+    const a = document.activeElement;
+    let target = 'page';
+    if (a === el.tvFrame) target = 'tv';
+    else if (a && a.tagName === 'IFRAME' && a.dataset.phone) target = 'phone' + a.dataset.phone;
+    if (target === lastTarget) return;
+    lastTarget = target;
+    el.tv.classList.toggle('has-keys', target === 'tv');
+    for (const slot of el.phones.children) slot.querySelector('.device').classList.toggle('has-keys', target === 'phone' + slot.dataset.i);
+    const span = el.keyTarget.querySelector('span');
+    el.keyTarget.classList.toggle('live', target !== 'page');
+    span.textContent =
+      target === 'tv' ? 'Keyboard goes to: the TV (it is the remote now)' :
+      target === 'page' ? 'Keyboard goes to: this page. Click the TV to use it as the remote.' :
+      'Keyboard goes to: Phone ' + target.slice(5);
+  }
+  setInterval(trackKeys, 250);
+
+  // ---------- wire up ----------
+  el.room.value = state.room;
+  el.tvUrl.value = state.tv;
+  el.phoneUrl.value = state.phone;
+  el.room.addEventListener('input', () => {
+    const v = el.room.value;
+    if (/\/join\//i.test(v) || /[^A-Za-z0-9]/.test(v) || v !== v.toUpperCase()) el.room.value = cleanRoom(v);
+  });
+  el.controls.addEventListener('submit', (e) => { e.preventDefault(); loadPhones(); });
+  for (const b of el.seg.querySelectorAll('button')) {
+    b.addEventListener('click', () => { state.phones = Number(b.dataset.n); persist(); syncPhones(); });
+  }
+  el.tvUrl.addEventListener('change', () => { state.tv = el.tvUrl.value.trim() || DEFAULTS.tv; el.tvUrl.value = state.tv; persist(); loadTv(); });
+  el.phoneUrl.addEventListener('change', () => {
+    state.phone = el.phoneUrl.value.trim() || DEFAULTS.phone;
+    el.phoneUrl.value = state.phone;
+    persist();
+    for (const slot of el.phones.children) slot.querySelector('.host').textContent = phoneHost(Number(slot.dataset.i));
+    checkServer();
+    if (state.loadedRoom) say('info', 'Phone base URL changed. Press <b>Load phones</b> to reload the phones from the new address.');
+    state.loadedRoom = '';
+  });
+  el.reloadTv.addEventListener('click', () => {
+    loadTv();
+    say('info', 'TV reloaded. If it shows a new room code, type it in <b>Room code</b> and press <b>Load phones</b> again.');
+  });
+  el.fullTv.addEventListener('click', () => setFull(!document.body.classList.contains('fulltv')));
+  el.exitFull.addEventListener('click', () => setFull(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (document.body.classList.contains('fulltv')) setFull(false);
+    else if (state.held) setHeld(state.held);
+  });
+  el.canDetails.addEventListener('toggle', layout);
+  window.addEventListener('resize', layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+
+  syncPhones();
+  loadTv();
+  checkServer();
+  setInterval(() => { checkServer(); checkTv(); }, 15000);
+  if (params.get('load') === '1' && isRoomCode(state.room)) loadPhones();
+})();
+</script>
+</body>
+</html>

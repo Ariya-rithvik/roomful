@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "plugins": [
+      "./plugins/withKotlinJvmTarget",
+      "./plugins/withKeyEvent",
+      "./plugins/withTvosDeploymentTarget",
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "androidTVBanner": "./assets/tv_icons/icon-400x240.png",
+          "appleTVImages": {
+            "icon": "./assets/tv_icons/icon-1280x768.png",
+            "iconSmall": "./assets/tv_icons/icon-400x240.png",
+            "iconSmall2x": "./assets/tv_icons/icon-800x480.png",
+            "topShelf": "./assets/tv_icons/icon-1920x720.png",
+            "topShelf2x": "./assets/tv_icons/icon-1920x720.png",
+            "topShelfWide": "./assets/tv_icons/icon-1920x720.png",
+            "topShelfWide2x": "./assets/tv_icons/icon-1920x720.png"
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "kotlinVersion": "2.0.21",
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "./plugins/withFmtXcode26Fix",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": true,
+          "supportsPictureInPicture": false
+        }
+      ]
+    ],
+    "name": "Roomful",
+    "slug": "roomcaption",
+    "scheme": "roomcaption",
+    "android": {
+      "package": "com.roomcaption.tv",
+      "permissions": ["com.amazon.permission.media.session.voicecommandcontrol"]
+    },
+    "ios": {
+      "bundleIdentifier": "com.roomcaption.tv"
+    },
+    "newArchEnabled": false,
+    "backgroundColor": "#0B0B0D"
+  }
+}

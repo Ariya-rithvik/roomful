@@ -1,0 +1,32 @@
+{
+  "name": "motionmates-tv-app",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.5.0",
+  "resolutions": {
+    "js-yaml": "^3.15.1",
+    "min-document": "^2.19.1",
+    "logkitty": "^0.7.1",
+    "node-fetch": "^2.6.7",
+    "ws": "^8.21.0"
+  },
+  "scripts": {
+    "dev": "yarn workspace @multi-tv/expo-multi-tv start",
+    "dev:android": "yarn workspace @multi-tv/expo-multi-tv android",
+    "dev:ios": "yarn workspace @multi-tv/expo-multi-tv ios",
+    "dev:web": "yarn workspace @multi-tv/expo-multi-tv web",
+    "build:all": "yarn workspaces foreach -A -pt run build",
+    "test:all": "yarn workspaces foreach -A -pt run test",
+    "lint:all": "yarn workspaces foreach -A -pt run lint",
+    "typecheck": "yarn workspaces foreach -A -pt run typecheck",
+    "clean:all": "yarn workspaces foreach -A run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

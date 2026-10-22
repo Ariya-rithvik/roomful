@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roomcaption phone test</title>
+<style>
+  body { font: 18px system-ui, sans-serif; margin: 16px; background: #111; color: #eee; }
+  button, select { font-size: 20px; padding: 10px 14px; margin: 4px 0; }
+  #live { font-size: 28px; min-height: 2.5em; color: #9cf; }
+  #final { font-size: 22px; }
+  .meta { color: #999; font-size: 14px; }
+  .ok { color: #7d7; } .bad { color: #f77; }
+</style>
+</head>
+<body>
+<h2>Roomcaption phone test</h2>
+<p id="support"></p>
+<label>Language
+  <select id="lang">
+    <option value="en-IN">English (India)</option>
+    <option value="hi-IN">Hindi</option>
+    <option value="ta-IN">Tamil</option>
+  </select>
+</label><br>
+<button id="start">Start listening</button>
+<button id="stop">Stop</button>
+<p class="meta" id="status">idle</p>
+<div id="live"></div>
+<div id="final"></div>
+<script>
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const $ = (id) => document.getElementById(id);
+$('support').innerHTML = SR ? '<span class="ok">Speech recognition available</span>' : '<span class="bad">Speech recognition NOT available in this browser</span>';
+$('support').innerHTML += window.isSecureContext ? ' · <span class="ok">secure context</span>' : ' · <span class="bad">NOT secure (mic blocked)</span>';
+let rec = null, want = false, utterStart = null, restarts = 0;
+function log(obj) { fetch('/log', { method: 'POST', body: JSON.stringify({ ua: navigator.userAgent.slice(0, 80), ...obj }) }).catch(() => {}); }
+function startRec() {
+  rec = new SR();
+  rec.lang = $('lang').value;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onstart = () => { $('status').textContent = 'listening (' + rec.lang + ')'; };
+  rec.onspeechstart = () => { utterStart = performance.now(); };
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      const t = r[0].transcript;
+      if (r.isFinal) {
+        const ms = utterStart ? Math.round(performance.now() - utterStart) : null;
+        $('final').insertAdjacentHTML('afterbegin', '<div>' + t.replace(/</g, '&lt;') + ' <span class="meta">(' + ms + ' ms from speech start)</span></div>');
+        log({ lang: rec.lang, final: t, confidence: r[0].confidence, msFromSpeechStart: ms, restarts });
+        utterStart = null;
+      } else interim += t;
+    }
+    $('live').textContent = interim;
+  };
+  rec.onerror = (e) => { $('status').textContent = 'error: ' + e.error; log({ lang: rec.lang, error: e.error }); };
+  rec.onend = () => { if (want) { restarts++; startRec(); } else $('status').textContent = 'stopped'; };
+  rec.start();
+}
+$('start').onclick = () => { if (!SR) return; want = true; startRec(); };
+$('stop').onclick = () => { want = false; rec && rec.stop(); };
+</script>
+</body>
+</html>

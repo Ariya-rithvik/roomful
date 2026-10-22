@@ -1,0 +1,5 @@
+{"room":"JGKT","speakerId":"spk_c5c2652e","utt":0,"tStart":1792161806138,"tRecv":1792161806767,"tRender":1792161806881,"endToEndMs":743,"phoneToServerMs":629}
+{"room":"JGKT","speakerId":"spk_a99ff6bf","utt":0,"tStart":1792161808153,"tRecv":1792161808656,"tRender":1792161808768,"endToEndMs":615,"phoneToServerMs":503}
+{"room":"JGKT","speakerId":"spk_d5e9dbeb","utt":1,"tStart":1792161809665,"tRecv":1792161810921,"tRender":1792161811037,"endToEndMs":1372,"phoneToServerMs":1256}
+{"room":"JGKT","speakerId":"spk_c5c2652e","utt":1,"tStart":1792161811729,"tRecv":1792161812974,"tRender":1792161813086,"endToEndMs":1357,"phoneToServerMs":1245}
+{"room":"JGKT","speakerId":"spk_d5e9dbeb","utt":2,"tStart":1792161814473,"tRecv":1792161815723,"tRender":1792161815828,"endToEndMs":1355,"phoneToServerMs":1250}
