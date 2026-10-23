@@ -46,7 +46,7 @@ Real-family trials, more languages, an optional room camera that turns to whoeve
 
 ## Honest limits
 - Not a medical device.
-- Not yet tested with a real family or on a real Fire TV stick at the time of writing (the video shows: …).
+- Not yet tested with a real family or on a real Fire TV stick at the time of writing (the video shows the same release APK on the Android TV emulator, with scripted test phones, labelled on screen).
 - Hindi and Tamil reply phrases need native-speaker review.
 
 ---
