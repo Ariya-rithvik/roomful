@@ -22,7 +22,8 @@ export function RecoverOverlay() {
   const first = useRef(recoverAsk.n);
 
   useEffect(() => {
-    if (recoverAsk.n !== first.current) setOpen({ byName: recoverAsk.byName, at: serverNow() });
+    // Open once per request: remember which ask was handled, or any re-render would reopen it.
+    if (recoverAsk.n !== first.current) { first.current = recoverAsk.n; setOpen({ byName: recoverAsk.byName, at: serverNow() }); }
   }, [recoverAsk, serverNow]);
   useEffect(() => setRecoverOpen(open !== null), [open, setRecoverOpen]);
 

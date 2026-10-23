@@ -114,6 +114,14 @@ Entry fields: date, tool / API / SDK, task attempted, steps taken, expected, act
 - **Workaround:** Android TV AVD for development; a Fire TV Stick for the final video.
 - **Suggestion:** an official Fire OS emulator image (or AVD skin + system image) for Windows, or a clear statement of which emulator counts.
 
+## 13. Release APK: Gradle reuses a stale JS bundle after edits in a workspace package
+- **Task:** fix a TV bug in `packages/shared-ui` and rebuild the Fire OS APK (2026-10-23).
+- **Actual:** `:app:createBundleReleaseJsAndAssets UP-TO-DATE`. Gradle only watches the app folder, so the APK shipped the old JavaScript, and the fix seemed not to work on the emulator.
+- **Severity:** medium. You ship code you didn't mean to.
+- **Workaround:** `gradlew app:createBundleReleaseJsAndAssets --rerun assembleRelease`.
+- **Suggestion:** the multi-TV starter could declare the workspace packages as bundle task inputs.
+- **The bug it hid (ours):** the "catch up" overlay reopened on every re-render, because it never remembered which request it had already handled. On a TV it couldn't be closed. Fixed in `RecoverOverlay.tsx`.
+
 ## What worked well
 
 - `react-tv-space-navigation` handled every screen (button grids, confirm dialogs) without custom focus code.

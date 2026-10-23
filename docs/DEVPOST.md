@@ -31,6 +31,7 @@ A grandparent who is losing their hearing slowly drops out of family conversatio
 - 63 automated tests.
 - Verified in the TV web build and as a Fire OS APK on an Android TV emulator, with scripted test phones.
 - Personal sound measured at 1–34 ms from the TV picture.
+- **Demo video:** recorded automatically (`scripts/record-demo.ts`) from the release Fire OS APK on the Android TV emulator, driven with remote key events. The family's phones are scripted test phones; Dadi's spoken reply is the real Amazon Polly audio the server sent to her phone. All of this is labelled on screen.
 - The real GDACS feed was polled live (211 events).
 
 ## Challenges
@@ -69,7 +70,7 @@ Real-family trials, more languages, an optional room camera that turns to whoeve
 - **Why it matters:** apps built on the starter can react to every button on a Fire TV remote, and the starter type-checks.
 
 ## Friction log
-See `docs/FRICTION-LOG.md` (12 entries).
+See `docs/FRICTION-LOG.md` (13 entries).
 
 ## Built during the hackathon
 Started in the submission window (repo created 2026-10-11).

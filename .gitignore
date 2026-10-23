@@ -16,3 +16,5 @@ tv-app/apps/*/ios/
 phone-web/public/mediapipe/
 phone-web/public/models/
 server/data/
+demo/
+demo-shot.png
