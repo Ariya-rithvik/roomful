@@ -1,7 +1,7 @@
 # Devpost submission text: Roomful
 
 **Track:** Fire TV (Fire OS app, React Native for TV, built on Amazon's multi-TV starter) · **Mini challenges:** Open Source, AWS Builder
-**Repo:** https://github.com/Ariya-rithvik/roomful (fill in after pushing)
+**Repo:** https://github.com/Ariya-rithvik/roomful
 **Video:** (YouTube link)
 
 ## Tagline
